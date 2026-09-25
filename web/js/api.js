@@ -13,7 +13,7 @@ upload.addEventListener("click",async () => {
     // でーたのいれものつくります
     const formData = new FormData();
     // つくったいれものにがぞういれます
-    formData.append("image", file)
+    formData.append("test", file)
     // goのapiにむけて画像はいったいれものをhttpつうしんでおくる
     const response = await fetch(
         "http://localhost:3000/",
