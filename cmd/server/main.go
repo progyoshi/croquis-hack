@@ -66,8 +66,13 @@ func main() {
 	router.POST("/api/today", uploadImage) //今日の画像を投稿
 	router.GET("/api/today", getImage)     //今日の画像を表示
 	// router.GET("/api/todayflag", getTodayflag) //今日投稿したかどうか
+
 	// webフォルダをFrontendとして配信
-	router.Static("/", "./web")
+	router.GET("/", func(c *gin.Context) {
+		c.File("./web/index.html")
+	})
+
+	router.StaticFile("/js/api.js", "./web/js/api.js")
 
 	// 標準出力にメッセージ表示
 	fmt.Println("Server started: http://localhost:3000")
