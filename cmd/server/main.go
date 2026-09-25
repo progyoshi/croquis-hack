@@ -4,6 +4,8 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+
+	"github.com/gin-gonic/gin"
 )
 
 // 画像を受け取るテスト
@@ -20,16 +22,15 @@ func testHandler(w http.ResponseWriter, r *http.Request) {
 func main() {
 	// http.HandleFunc("/", testHandler)
 
-	// webフォルダをFrontendとして配信
-	fs := http.FileServer(http.Dir("./web"))
-	http.Handle("/", fs)
+	router := gin.Default() // Ginルーター初期化
 
+	// webフォルダをFrontendとして配信
+	router.Static("/", "./web")
+
+	// 標準出力にメッセージ表示
 	fmt.Println("Server started: http://localhost:3000")
 
 	//サーバ起動
-	err := http.ListenAndServe(":3000", nil)
-	if err != nil {
-		fmt.Println(err)
-	}
+	router.Run(":3000")
 
 }
