@@ -16,7 +16,7 @@ upload.addEventListener("click",async () => {
     formData.append("test", file)
     // goのapiにむけて画像はいったいれものをhttpつうしんでおくる
     const response = await fetch(
-        "http://localhost:3000/",
+        "http://localhost:3000/api/today",
         {
             method: "POST",
             body: formData
@@ -24,6 +24,20 @@ upload.addEventListener("click",async () => {
     );
 });
 
-
+const reload = document.getElementById("reload")
 const preview = document.getElementById("preview");
-preview.src = ここにpreviewのURLをいれる;
+
+reload.addEventListener("click",async()=>{
+    const response = await fetch(
+    "http://localhost:3000/api/today"
+    );
+
+    const blob = await response.blob();
+
+    const url = URL.createObjectURL(blob);
+
+    preview.src = url;
+});
+
+
+// preview.src = ここにpreviewのURLをいれる;
