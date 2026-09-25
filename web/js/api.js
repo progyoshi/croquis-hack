@@ -19,7 +19,7 @@ upload.addEventListener("click",async () => {
         "http://localhost:3000/",
         {
             method: "POST",
-            bosy: formData
+            body: formData
         }
     );
 });
