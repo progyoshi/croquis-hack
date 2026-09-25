@@ -18,7 +18,18 @@ func testHandler(w http.ResponseWriter, r *http.Request) {
 }
 
 func main() {
-	http.HandleFunc("/", testHandler)
+	// http.HandleFunc("/", testHandler)
+
+	// webフォルダをFrontendとして配信
+	fs := http.FileServer(http.Dir("./web"))
+	http.Handle("/", fs)
+
+	fmt.Println("Server started: http://localhost:3000")
+
 	//サーバ起動
-	http.ListenAndServe(":3000", nil)
+	err := http.ListenAndServe(":3000", nil)
+	if err != nil {
+		fmt.Println(err)
+	}
+
 }
