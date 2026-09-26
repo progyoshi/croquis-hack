@@ -18,7 +18,7 @@ import (
 func uploadImage(c *gin.Context) {
 	//画像を受け取る
 	file, err := c.FormFile("test")
-	if err == nil {
+	if err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{
 			"message": "画像を取得できませんでした",
 		})
@@ -26,9 +26,11 @@ func uploadImage(c *gin.Context) {
 	}
 
 	//画像保存先
-	imagePath := filepath.Join("upload", "today")
+	imageName := "today.jpeg"                                      // ユーザ名_継続日数.jpegとか？
+	imagePath := filepath.Join("upload", filepath.Base(imageName)) //保存先パス, ファイル名
 	//保存
 	err = c.SaveUploadedFile(file, imagePath)
+
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{
 			"message": "画像を保存できませんでした",
@@ -36,15 +38,15 @@ func uploadImage(c *gin.Context) {
 		return
 	}
 
-	c.JSON(http.StatusOK, gin.H{
-		"message": "画像をアップロードしました",
-	})
+	c.String(http.StatusOK, fmt.Sprintf("'%s' uploaded in %s!\n", imageName, imagePath))
+
 }
 
 // 今日の画像そのものを返す
 func getImage(c *gin.Context) {
 
-	imagePath := filepath.Join("upload", "today")
+	imageName := "today.jpeg"
+	imagePath := filepath.Join("upload", filepath.Base(imageName))
 
 	_, err := os.Stat(imagePath)
 	if err != nil {
