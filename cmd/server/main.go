@@ -1,6 +1,8 @@
 package main
 
 import (
+	"bytes"
+	"encoding/json"
 	"fmt"
 	"log"
 	"net/http"
@@ -47,9 +49,9 @@ func main() {
 
 }
 
-// 画像を受け取るテスト
+// 画像を投稿する関数
 func uploadImage(c *gin.Context) {
-	//画像を受け取る
+	// フロントから画像を受け取る
 	image, err := c.FormFile("test")
 	errlog(err)
 
@@ -77,10 +79,10 @@ func uploadImage(c *gin.Context) {
 
 	// Supabase Storageに画像をアップロード
 
-	URL := API_URL + "/storage/v1/object/images/" + imageName // StorageのアップロードURL
+	storageURL := API_URL + "/storage/v1/object/images/" + imageName // StorageのアップロードURL
 
 	// HTTPリクエストを作成
-	req, err := http.NewRequest(http.MethodPost, URL, imageIO)
+	req, err := http.NewRequest("POST", storageURL, imageIO)
 	errlog(err)
 	req.Header.Set("Authorization", "Bearer "+API_KEY)
 	req.Header.Set("apikey", API_KEY)
@@ -96,7 +98,39 @@ func uploadImage(c *gin.Context) {
 		log.Println("画像のアップロードに失敗しました。ステータスコード:", resp.StatusCode)
 		return
 	} else {
-		log.Printf("%sを保存しました！ステータスコード: %d", imageName, resp.StatusCode)
+		log.Printf("画像をアップロードできました！「%s」\n", imageName)
+
+		// 投稿できたら、データベースに投稿したことを記録する
+		// 挿入するデータを作成
+		post := struct {
+			ImagePath string `json:"image_path"`
+		}{
+			ImagePath: imageName,
+		}
+		// JSONに変換
+		postJSON, err := json.Marshal(post)
+		errlog(err)
+
+		// storageと同様に通信
+		// HTTPリクエストを作成
+		req, err := http.NewRequest("POST", API_URL+"/rest/v1/posts", bytes.NewReader(postJSON))
+		errlog(err)
+		req.Header.Set("Authorization", "Bearer "+API_KEY)
+		req.Header.Set("apikey", API_KEY)
+		req.Header.Set("Content-Type", "application/json")
+
+		// HTTPリクエストを送信
+		client := &http.Client{}
+		resp, err := client.Do(req)
+		errlog(err)
+		defer resp.Body.Close()
+
+		if resp.StatusCode < 200 || resp.StatusCode >= 300 {
+			log.Println("投稿に失敗しました。ステータスコード:", resp.StatusCode)
+			return
+		} else {
+			log.Printf("投稿できました！「%s」\n", post.ImagePath)
+		}
 	}
 
 }
