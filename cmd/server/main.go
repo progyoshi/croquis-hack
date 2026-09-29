@@ -2,66 +2,29 @@ package main
 
 import (
 	"fmt"
+	"log"
 	"net/http"
 	"os"
 	"path/filepath"
+	"time"
 
 	"github.com/gin-gonic/gin"
+	"github.com/joho/godotenv"
 )
 
-//今日画像が投稿されたかどうか
-// func getTodayflag(c *gin.Context){
-// 	//etc...
-// }
-
-// 画像を受け取るテスト
-func uploadImage(c *gin.Context) {
-	//画像を受け取る
-	file, err := c.FormFile("test")
-	if err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{
-			"message": "画像を取得できませんでした",
-		})
-		return
-	}
-
-	//画像保存先
-	imageName := "today.jpeg"                                      // ユーザ名_継続日数.jpegとか？
-	imagePath := filepath.Join("upload", filepath.Base(imageName)) //保存先パス, ファイル名
-	//保存
-	err = c.SaveUploadedFile(file, imagePath)
-
-	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{
-			"message": "画像を保存できませんでした",
-		})
-		return
-	}
-
-	c.String(http.StatusOK, fmt.Sprintf("'%s' uploaded in %s!\n", imageName, imagePath))
-
-}
-
-// 今日の画像そのものを返す
-func getImage(c *gin.Context) {
-
-	imageName := "today.jpeg"
-	imagePath := filepath.Join("upload", filepath.Base(imageName))
-
-	_, err := os.Stat(imagePath)
-	if err != nil {
-		c.JSON(http.StatusNotFound, gin.H{
-			"message": "画像がありません",
-		})
-		return
-	}
-
-	c.File(imagePath)
-
-}
+var API_URL string
+var API_KEY string
 
 func main() {
-	// http.HandleFunc("/", testHandler)
+
+	// 環境変数の読み込み
+	err := godotenv.Load()
+	if err != nil {
+		panic("環境変数が読み込めませんでした")
+	}
+
+	API_URL = os.Getenv("SUPABASE_URL")
+	API_KEY = os.Getenv("SUPABASE_KEY")
 
 	router := gin.Default() // Ginルーター初期化
 
@@ -74,7 +37,7 @@ func main() {
 		c.File("./web/index.html")
 	})
 
-	router.StaticFile("/js/api.js", "./web/js/api.js")
+	router.Static("/js", "./web/js") // javascriptのフォルダ配信
 
 	// 標準出力にメッセージ表示
 	fmt.Println("Server started: http://localhost:3000")
@@ -82,4 +45,79 @@ func main() {
 	//サーバ起動
 	router.Run(":3000")
 
+}
+
+// 画像を受け取るテスト
+func uploadImage(c *gin.Context) {
+	//画像を受け取る
+	image, err := c.FormFile("test")
+	errlog(err)
+
+	//画像のContent-Type(jpeg/pngとか)を取得
+	conType := image.Header.Get("Content-Type")
+	if conType != "image/jpeg" && conType != "image/png" {
+		log.Println("jpg、png以外のファイルは受け取れません")
+		return
+	}
+
+	// 画像を開く
+	imageIO, err := image.Open()
+	errlog(err)
+	defer imageIO.Close()
+	//画像名を日付で作成
+	imageName := "today-" + time.Now().Format("20060102150405") + filepath.Ext(image.Filename)
+
+	// // 一時ファイルとして保存
+	// tempFile, err := os.CreateTemp("", "temp-*.jpeg")
+	// errlog(err)
+	// defer os.Remove(tempFile.Name()) // 終了時に一時ファイルを削除
+	// defer tempFile.Close()
+	// err = c.SaveUploadedFile(image, tempFile.Name())
+	// errlog(err)
+
+	// Supabase Storageに画像をアップロード
+
+	URL := API_URL + "/storage/v1/object/images/" + imageName // StorageのアップロードURL
+
+	// HTTPリクエストを作成
+	req, err := http.NewRequest(http.MethodPost, URL, imageIO)
+	errlog(err)
+	req.Header.Set("Authorization", "Bearer "+API_KEY)
+	req.Header.Set("apikey", API_KEY)
+	req.Header.Set("Content-Type", conType)
+
+	// HTTPリクエストを送信
+	client := &http.Client{}
+	resp, err := client.Do(req)
+	errlog(err)
+	defer resp.Body.Close()
+
+	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
+		log.Println("画像のアップロードに失敗しました。ステータスコード:", resp.StatusCode)
+		return
+	} else {
+		log.Printf("%sを保存しました！ステータスコード: %d", imageName, resp.StatusCode)
+	}
+
+}
+
+// 今日の画像そのものを返す
+func getImage(c *gin.Context) {
+
+	imageName := "today.jpeg"
+	imagePath := filepath.Join("upload", filepath.Base(imageName))
+
+	_, err := os.Stat(imagePath)
+	errlog(err)
+
+	c.File(imagePath)
+
+}
+
+// エラーログを出力する関数
+func errlog(err error) {
+	if err != nil {
+		log.Println(err)
+		return
+	}
 }
