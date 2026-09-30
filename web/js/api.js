@@ -33,6 +33,19 @@ upload.addEventListener("click",async () => {
     preview.src = url;
 });
 
+window.onload = async() =>{
+    const response = await fetch(
+        "http://localhost:3000/api/today",
+        {
+            method: "GET"
+        }
+    );
+    const data = await response.json();
 
+    const url = data.image_url;
 
+    console.log(url)
+
+    preview.src = url;
+};
 // preview.src = ここにpreviewのURLをいれる;
