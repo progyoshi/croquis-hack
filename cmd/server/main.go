@@ -37,7 +37,8 @@ func main() {
 		c.File("./web/index.html")
 	})
 
-	router.Static("/js", "./web/js") // javascriptのフォルダ配信
+	router.Static("/js", "./web/js")   // javascriptのフォルダ配信
+	router.Static("/img", "./web/img") // 画像のフォルダ配信
 
 	// 標準出力にメッセージ表示
 	fmt.Println("Server started: http://localhost:3000")
@@ -236,7 +237,8 @@ func getImage(c *gin.Context) {
 		log.Println("今日の投稿が見つかりませんでした。")
 		// ここでも一応フロントに返してるよ：404
 		c.JSON(http.StatusNotFound, gin.H{
-			"message": "今日の投稿が見つかりませんでした。",
+			"message":   "今日の投稿が見つかりませんでした。",
+			"image_url": "/img/plane.png", // 画像がない場合はデフォルトの画像を返す
 		})
 		return
 	}
