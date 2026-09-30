@@ -53,8 +53,12 @@ func uploadImage(c *gin.Context) {
 
 	// フロントから画像を受け取る
 	image, err := c.FormFile("test")
+	// この処理超出てくるよ、エラーがあった時ログを出す＆ここで関数を中断するよ
 	if err != nil {
 		log.Println(err)
+		c.JSON(http.StatusBadRequest, gin.H{
+			"message": "画像の受け取りに失敗しました",
+		})
 		return
 	}
 
@@ -62,6 +66,9 @@ func uploadImage(c *gin.Context) {
 	conType := image.Header.Get("Content-Type")
 	if conType != "image/jpeg" && conType != "image/png" {
 		log.Println("jpg、png以外のファイルは受け取れません")
+		c.JSON(http.StatusBadRequest, gin.H{
+			"message": "jpg、png以外のファイルは受け取れません",
+		})
 		return
 	}
 
@@ -69,6 +76,9 @@ func uploadImage(c *gin.Context) {
 	imageIO, err := image.Open()
 	if err != nil {
 		log.Println(err)
+		c.JSON(http.StatusInternalServerError, gin.H{
+			"message": "画像のオープンに失敗しました",
+		})
 		return
 	}
 	defer imageIO.Close()
@@ -99,6 +109,9 @@ func uploadImage(c *gin.Context) {
 
 	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
 		log.Println("画像のアップロードに失敗しました。ステータスコード:", resp.StatusCode)
+		c.JSON(http.StatusInternalServerError, gin.H{
+			"message": "画像のアップロードに失敗しました",
+		})
 		return
 	}
 	log.Printf("画像をアップロードできました！「%s」\n", imageName)
@@ -133,12 +146,18 @@ func uploadImage(c *gin.Context) {
 	resp, err = client.Do(req)
 	if err != nil {
 		log.Println(err)
+		c.JSON(http.StatusInternalServerError, gin.H{
+			"message": "投稿に失敗しました",
+		})
 		return
 	}
 	defer resp.Body.Close()
 
 	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
 		log.Println("投稿に失敗しました。ステータスコード:", resp.StatusCode)
+		c.JSON(http.StatusInternalServerError, gin.H{
+			"message": "投稿に失敗しました",
+		})
 		return
 	}
 	log.Printf("投稿できました！「%s」\n", post.ImagePath)
@@ -150,7 +169,7 @@ func uploadImage(c *gin.Context) {
 
 }
 
-// 今日の画像そのものを返す
+// 今日の画像のURLを返す
 func getImage(c *gin.Context) {
 
 	// 現在の日本時刻を取得
@@ -168,8 +187,8 @@ func getImage(c *gin.Context) {
 	log.Printf("UTC start: %s, end: %s", startOfDay.UTC(), endOfDay.UTC())
 
 	// PostgREST APIのクエリを作成
-	// 4:00以上翌4:00未満の投稿を昇順に並べ、上位1つを取得
-	url := API_URL + "/rest/v1/posts?select=image_path,posted_at" + "&posted_at=gte." + startOfDay.UTC().Format(time.RFC3339) + "&posted_at=lt." + endOfDay.UTC().Format(time.RFC3339) + "&order=posted_at.desc"
+	// 4:00～翌3:59の投稿を昇順に並べ、上位1つを取得
+	url := API_URL + "/rest/v1/posts?select=image_path,posted_at" + "&posted_at=gte." + startOfDay.UTC().Format(time.RFC3339) + "&posted_at=lt." + endOfDay.UTC().Format(time.RFC3339) + "&order=posted_at.desc&limit=1"
 
 	// HTTPリクエストを作成
 	req, err := http.NewRequest("GET", url, nil)
@@ -191,6 +210,10 @@ func getImage(c *gin.Context) {
 
 	if resp.StatusCode != http.StatusOK {
 		log.Println("投稿の取得に失敗しました。ステータスコード:", resp.StatusCode)
+		// ここでも一応フロントに返してるよ：500
+		c.JSON(http.StatusInternalServerError, gin.H{
+			"message": "投稿の取得に失敗しました。",
+		})
 		return
 
 	}
@@ -207,6 +230,10 @@ func getImage(c *gin.Context) {
 	}
 	if len(post) == 0 {
 		log.Println("今日の投稿が見つかりませんでした。")
+		// ここでも一応フロントに返してるよ：404
+		c.JSON(http.StatusNotFound, gin.H{
+			"message": "今日の投稿が見つかりませんでした。",
+		})
 		return
 
 	}
@@ -216,9 +243,10 @@ func getImage(c *gin.Context) {
 	// ストレージ上の画像のパスを返す
 	imageURL := API_URL + "/storage/v1/object/images/" + post[0].ImagePath
 
+	// これが投稿した画像のJSONだよ
 	c.JSON(http.StatusOK, gin.H{
-		"image_url": imageURL,
-		"posted_at": post[0].PostedAt,
+		"image_url": imageURL, // 画像のURL
+		// "posted_at": post[0].PostedAt, // UTC時間での投稿日時返さなくても良いかなって
 	})
 
 }
