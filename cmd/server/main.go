@@ -162,9 +162,14 @@ func uploadImage(c *gin.Context) {
 	}
 	log.Printf("投稿できました！「%s」\n", post.ImagePath)
 
+	// ストレージ上の画像のパスを返す
+	imageURL := API_URL + "/storage/v1/object/public/images/" + post.ImagePath
+	log.Printf("画像のURLを返します:%s\n", imageURL)
+
+	// これが画像投稿した時に画像のURL返すJSONだよ
 	c.JSON(http.StatusOK, gin.H{
-		"message":    "投稿に成功しました",
-		"image_path": post.ImagePath,
+		"message":   "投稿に成功しました",
+		"image_url": imageURL, // 画像のURLを返す
 	})
 }
 
@@ -214,11 +219,10 @@ func getImage(c *gin.Context) {
 			"message": "投稿の取得に失敗しました。",
 		})
 		return
-
 	}
 
 	// レスポンスをデコード
-	var post []struct {
+	var post struct {
 		ImagePath string `json:"image_path"`
 		PostedAt  string `json:"posted_at"`
 	}
@@ -227,7 +231,7 @@ func getImage(c *gin.Context) {
 		log.Println(err)
 		return
 	}
-	if len(post) == 0 {
+	if post.ImagePath == "" {
 		log.Println("今日の投稿が見つかりませんでした。")
 		// ここでも一応フロントに返してるよ：404
 		c.JSON(http.StatusNotFound, gin.H{
@@ -240,13 +244,13 @@ func getImage(c *gin.Context) {
 	log.Printf("投稿を取得できました！:%s\n", post)
 
 	// ストレージ上の画像のパスを返す
-	imageURL := API_URL + "/storage/v1/object/public/images/" + post[0].ImagePath
+	imageURL := API_URL + "/storage/v1/object/public/images/" + post.ImagePath
 	log.Printf("画像のURLを返します:%s\n", imageURL)
 
 	// これが投稿した画像のJSONだよ
 	c.JSON(http.StatusOK, gin.H{
 		"image_url": imageURL, // 画像のURL
-		// "posted_at": post[0].PostedAt, // UTC時間での投稿日時返さなくても良いかなって
+		// "posted_at": post.PostedAt, // UTC時間での投稿日時返さなくても良いかなって
 	})
 
 }
