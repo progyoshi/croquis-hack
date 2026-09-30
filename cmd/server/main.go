@@ -24,7 +24,6 @@ func main() {
 	if err != nil {
 		panic("環境変数が読み込めませんでした")
 	}
-
 	API_URL = os.Getenv("SUPABASE_URL")
 	API_KEY = os.Getenv("SUPABASE_KEY")
 
@@ -51,9 +50,13 @@ func main() {
 
 // 画像を投稿する関数
 func uploadImage(c *gin.Context) {
+
 	// フロントから画像を受け取る
 	image, err := c.FormFile("test")
-	errlog(err)
+	if err != nil {
+		log.Println(err)
+		return
+	}
 
 	//画像のContent-Type(jpeg/pngとか)を取得
 	conType := image.Header.Get("Content-Type")
@@ -64,26 +67,23 @@ func uploadImage(c *gin.Context) {
 
 	// 画像を開く
 	imageIO, err := image.Open()
-	errlog(err)
+	if err != nil {
+		log.Println(err)
+		return
+	}
 	defer imageIO.Close()
 	//画像名を日付で作成
 	imageName := "today-" + time.Now().Format("20060102150405") + filepath.Ext(image.Filename)
 
-	// // 一時ファイルとして保存
-	// tempFile, err := os.CreateTemp("", "temp-*.jpeg")
-	// errlog(err)
-	// defer os.Remove(tempFile.Name()) // 終了時に一時ファイルを削除
-	// defer tempFile.Close()
-	// err = c.SaveUploadedFile(image, tempFile.Name())
-	// errlog(err)
-
 	// Supabase Storageに画像をアップロード
-
 	storageURL := API_URL + "/storage/v1/object/images/" + imageName // StorageのアップロードURL
 
 	// HTTPリクエストを作成
 	req, err := http.NewRequest("POST", storageURL, imageIO)
-	errlog(err)
+	if err != nil {
+		log.Println(err)
+		return
+	}
 	req.Header.Set("Authorization", "Bearer "+API_KEY)
 	req.Header.Set("apikey", API_KEY)
 	req.Header.Set("Content-Type", conType)
@@ -91,67 +91,134 @@ func uploadImage(c *gin.Context) {
 	// HTTPリクエストを送信
 	client := &http.Client{}
 	resp, err := client.Do(req)
-	errlog(err)
+	if err != nil {
+		log.Println(err)
+		return
+	}
 	defer resp.Body.Close()
 
 	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
 		log.Println("画像のアップロードに失敗しました。ステータスコード:", resp.StatusCode)
 		return
-	} else {
-		log.Printf("画像をアップロードできました！「%s」\n", imageName)
-
-		// 投稿できたら、データベースに投稿したことを記録する
-		// 挿入するデータを作成
-		post := struct {
-			ImagePath string `json:"image_path"`
-		}{
-			ImagePath: imageName,
-		}
-		// JSONに変換
-		postJSON, err := json.Marshal(post)
-		errlog(err)
-
-		// storageと同様に通信
-		// HTTPリクエストを作成
-		req, err := http.NewRequest("POST", API_URL+"/rest/v1/posts", bytes.NewReader(postJSON))
-		errlog(err)
-		req.Header.Set("Authorization", "Bearer "+API_KEY)
-		req.Header.Set("apikey", API_KEY)
-		req.Header.Set("Content-Type", "application/json")
-
-		// HTTPリクエストを送信
-		client := &http.Client{}
-		resp, err := client.Do(req)
-		errlog(err)
-		defer resp.Body.Close()
-
-		if resp.StatusCode < 200 || resp.StatusCode >= 300 {
-			log.Println("投稿に失敗しました。ステータスコード:", resp.StatusCode)
-			return
-		} else {
-			log.Printf("投稿できました！「%s」\n", post.ImagePath)
-		}
 	}
+	log.Printf("画像をアップロードできました！「%s」\n", imageName)
+
+	// 投稿できたら、データベースに投稿したことを記録する
+	// 挿入するデータを作成
+	post := struct {
+		ImagePath string `json:"image_path"`
+	}{
+		ImagePath: imageName,
+	}
+	// JSONに変換
+	postJSON, err := json.Marshal(post)
+	if err != nil {
+		log.Println(err)
+		return
+	}
+
+	// storageと同様に通信
+	// HTTPリクエストを作成
+	req, err = http.NewRequest("POST", API_URL+"/rest/v1/posts", bytes.NewReader(postJSON))
+	if err != nil {
+		log.Println(err)
+		return
+	}
+	req.Header.Set("Authorization", "Bearer "+API_KEY)
+	req.Header.Set("apikey", API_KEY)
+	req.Header.Set("Content-Type", "application/json")
+
+	// HTTPリクエストを送信
+	client = &http.Client{}
+	resp, err = client.Do(req)
+	if err != nil {
+		log.Println(err)
+		return
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
+		log.Println("投稿に失敗しました。ステータスコード:", resp.StatusCode)
+		return
+	}
+	log.Printf("投稿できました！「%s」\n", post.ImagePath)
+
+	c.JSON(http.StatusOK, gin.H{
+		"message":    "投稿に成功しました",
+		"image_path": post.ImagePath,
+	})
 
 }
 
 // 今日の画像そのものを返す
 func getImage(c *gin.Context) {
 
-	imageName := "today.jpeg"
-	imagePath := filepath.Join("upload", filepath.Base(imageName))
-
-	_, err := os.Stat(imagePath)
-	errlog(err)
-
-	c.File(imagePath)
-
-}
-
-// エラーログを出力する関数
-func errlog(err error) {
+	// 現在の日本時刻を取得
+	jst, err := time.LoadLocation("Asia/Tokyo") // 日本時間のタイムゾーンを取得
 	if err != nil {
 		log.Println(err)
 		return
 	}
+	// 4:00～3:59を1日とするため、現在時刻から4時間引いた時刻を取得
+	now := time.Now().In(jst).Add(time.Duration(-4) * time.Hour)
+	startOfDay := time.Date(now.Year(), now.Month(), now.Day(), 4, 0, 0, 0, jst)
+	endOfDay := startOfDay.AddDate(0, 0, 1)
+
+	log.Printf("now:%s, start:%s, end:%s", now.String(), startOfDay.String(), endOfDay.String())
+	log.Printf("UTC start: %s, end: %s", startOfDay.UTC(), endOfDay.UTC())
+
+	// PostgREST APIのクエリを作成
+	// 4:00以上翌4:00未満の投稿を昇順に並べ、上位1つを取得
+	url := API_URL + "/rest/v1/posts?select=image_path,posted_at" + "&posted_at=gte." + startOfDay.UTC().Format(time.RFC3339) + "&posted_at=lt." + endOfDay.UTC().Format(time.RFC3339) + "&order=posted_at.desc"
+
+	// HTTPリクエストを作成
+	req, err := http.NewRequest("GET", url, nil)
+	if err != nil {
+		log.Println(err)
+		return
+	}
+	req.Header.Set("Authorization", "Bearer "+API_KEY)
+	req.Header.Set("apikey", API_KEY)
+
+	// HTTPリクエストを送信
+	client := &http.Client{}
+	resp, err := client.Do(req)
+	if err != nil {
+		log.Println(err)
+		return
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		log.Println("投稿の取得に失敗しました。ステータスコード:", resp.StatusCode)
+		return
+
+	}
+
+	// レスポンスをデコード
+	var post []struct {
+		ImagePath string `json:"image_path"`
+		PostedAt  string `json:"posted_at"`
+	}
+	err = json.NewDecoder(resp.Body).Decode(&post)
+	if err != nil {
+		log.Println(err)
+		return
+	}
+	if len(post) == 0 {
+		log.Println("今日の投稿が見つかりませんでした。")
+		return
+
+	}
+
+	log.Printf("投稿を取得できました！:%s\n", post)
+
+	// ストレージ上の画像のパスを返す
+	imageURL := API_URL + "/storage/v1/object/images/" + post[0].ImagePath
+
+	c.JSON(http.StatusOK, gin.H{
+		"image_url": imageURL,
+		"posted_at": post[0].PostedAt,
+	})
+
 }
