@@ -166,7 +166,6 @@ func uploadImage(c *gin.Context) {
 		"message":    "投稿に成功しました",
 		"image_path": post.ImagePath,
 	})
-
 }
 
 // 今日の画像のURLを返す
@@ -241,7 +240,8 @@ func getImage(c *gin.Context) {
 	log.Printf("投稿を取得できました！:%s\n", post)
 
 	// ストレージ上の画像のパスを返す
-	imageURL := API_URL + "/storage/v1/object/images/" + post[0].ImagePath
+	imageURL := API_URL + "/storage/v1/object/public/images/" + post[0].ImagePath
+	log.Printf("画像のURLを返します:%s\n", imageURL)
 
 	// これが投稿した画像のJSONだよ
 	c.JSON(http.StatusOK, gin.H{
