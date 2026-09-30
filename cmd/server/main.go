@@ -2,12 +2,14 @@ package main
 
 import (
 	"bytes"
+	"crypto/rand"
+	"encoding/hex"
 	"encoding/json"
 	"fmt"
+	"io"
 	"log"
 	"net/http"
 	"os"
-	"path/filepath"
 	"time"
 
 	"github.com/gin-gonic/gin"
@@ -26,8 +28,12 @@ func main() {
 	}
 	API_URL = os.Getenv("SUPABASE_URL")
 	API_KEY = os.Getenv("SUPABASE_KEY")
+	if API_URL == "" || API_KEY == "" {
+		panic("環境変数が設定されていません")
+	}
 
-	router := gin.Default() // Ginルーター初期化
+	router := gin.Default()             // Ginルーター初期化
+	router.MaxMultipartMemory = 8 << 20 // 8MBまでのファイルを受け付ける
 
 	router.POST("/api/today", uploadImage) //今日の画像を投稿
 	router.GET("/api/today", getImage)     //今日の画像を表示
@@ -50,6 +56,10 @@ func main() {
 
 // 画像を投稿する関数
 func uploadImage(c *gin.Context) {
+	// 8MBまでのファイルを受け付ける
+	const maxImageSize = 8 << 20 // 8MB
+	// multipart/form-dataのヘッダーサイズを考慮したら1MB追加した方が良いらしい
+	c.Request.Body = http.MaxBytesReader(c.Writer, c.Request.Body, maxImageSize+(1<<20))
 
 	// フロントから画像を受け取る
 	image, err := c.FormFile("test")
@@ -62,12 +72,10 @@ func uploadImage(c *gin.Context) {
 		return
 	}
 
-	//画像のContent-Type(jpeg/pngとか)を取得
-	conType := image.Header.Get("Content-Type")
-	if conType != "image/jpeg" && conType != "image/png" {
-		log.Println("jpg、png以外のファイルは受け取れません")
-		c.JSON(http.StatusBadRequest, gin.H{
-			"message": "jpg、png以外のファイルは受け取れません",
+	if image.Size > maxImageSize {
+		log.Println("画像のサイズが大きすぎます")
+		c.JSON(http.StatusRequestEntityTooLarge, gin.H{
+			"message": "画像のサイズが大きすぎます",
 		})
 		return
 	}
@@ -82,16 +90,65 @@ func uploadImage(c *gin.Context) {
 		return
 	}
 	defer imageIO.Close()
-	//画像名を日付で作成
-	imageName := "today-" + time.Now().Format("20060102150405") + filepath.Ext(image.Filename)
+
+	imageHeader := make([]byte, 512) // 画像のヘッダーを取得するためのバッファ
+	n, err := imageIO.Read(imageHeader)
+	if err != nil {
+		log.Println(err)
+		c.JSON(http.StatusBadRequest, gin.H{
+			"message": "画像の読み込みに失敗しました",
+		})
+		return
+	}
+
+	//画像のContent-Type(jpeg/pngとか)を取得
+	conType := http.DetectContentType(imageHeader[:n])
+	if conType != "image/jpeg" && conType != "image/png" {
+		log.Println("jpg、png以外のファイルは受け取れません")
+		c.JSON(http.StatusRequestEntityTooLarge, gin.H{
+			"message": "jpg、png以外のファイルは受け取れません",
+		})
+		return
+	}
+
+	// ファイル位置を先頭に戻す
+	_, err = imageIO.Seek(0, io.SeekStart)
+	if err != nil {
+		log.Println(err)
+		c.JSON(http.StatusInternalServerError, gin.H{
+			"message": "画像のシークに失敗しました",
+		})
+		return
+	}
+
+	// 拡張子を決定
+	ext := ".jpg"
+	if conType == "image/png" {
+		ext = ".png"
+	}
+	//画像名をランダムにする
+	randBytes := make([]byte, 8) // 8バイトのランダムなバイト列を生成
+	_, err = rand.Read(randBytes)
+	if err != nil {
+		log.Println(err)
+		c.JSON(http.StatusInternalServerError, gin.H{
+			"message": "ランダムな画像名の生成に失敗しました",
+		})
+		return
+	}
+	imageName := hex.EncodeToString(randBytes) + ext
+
+	// StorageのアップロードURL
+	storageURL := API_URL + "/storage/v1/object/images/" + imageName
 
 	// Supabase Storageに画像をアップロード
-	storageURL := API_URL + "/storage/v1/object/images/" + imageName // StorageのアップロードURL
-
 	// HTTPリクエストを作成
 	req, err := http.NewRequest("POST", storageURL, imageIO)
 	if err != nil {
 		log.Println(err)
+		c.JSON(http.StatusInternalServerError, gin.H{
+			"message": "HTTPリクエストの作成に失敗しました",
+		})
 		return
 	}
 	req.Header.Set("Authorization", "Bearer "+API_KEY)
@@ -99,17 +156,22 @@ func uploadImage(c *gin.Context) {
 	req.Header.Set("Content-Type", conType)
 
 	// HTTPリクエストを送信
-	client := &http.Client{}
+	client := &http.Client{
+		Timeout: 10 * time.Second, // タイムアウトを設定
+	}
 	resp, err := client.Do(req)
 	if err != nil {
 		log.Println(err)
+		c.JSON(http.StatusInternalServerError, gin.H{
+			"message": "HTTPリクエストの送信に失敗しました",
+		})
 		return
 	}
 	defer resp.Body.Close()
 
 	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
 		log.Println("画像のアップロードに失敗しました。ステータスコード:", resp.StatusCode)
-		c.JSON(http.StatusInternalServerError, gin.H{
+		c.JSON(http.StatusBadGateway, gin.H{
 			"message": "画像のアップロードに失敗しました",
 		})
 		return
@@ -135,6 +197,9 @@ func uploadImage(c *gin.Context) {
 	req, err = http.NewRequest("POST", API_URL+"/rest/v1/posts", bytes.NewReader(postJSON))
 	if err != nil {
 		log.Println(err)
+		c.JSON(http.StatusInternalServerError, gin.H{
+			"message": "HTTPリクエストの作成に失敗しました",
+		})
 		return
 	}
 	req.Header.Set("Authorization", "Bearer "+API_KEY)
@@ -142,7 +207,9 @@ func uploadImage(c *gin.Context) {
 	req.Header.Set("Content-Type", "application/json")
 
 	// HTTPリクエストを送信
-	client = &http.Client{}
+	client = &http.Client{
+		Timeout: 10 * time.Second, // タイムアウトを設定
+	}
 	resp, err = client.Do(req)
 	if err != nil {
 		log.Println(err)
@@ -198,16 +265,24 @@ func getImage(c *gin.Context) {
 	req, err := http.NewRequest("GET", url, nil)
 	if err != nil {
 		log.Println(err)
+		c.JSON(http.StatusInternalServerError, gin.H{
+			"message": "HTTPリクエストの作成に失敗しました",
+		})
 		return
 	}
 	req.Header.Set("Authorization", "Bearer "+API_KEY)
 	req.Header.Set("apikey", API_KEY)
 
 	// HTTPリクエストを送信
-	client := &http.Client{}
+	client := &http.Client{
+		Timeout: 10 * time.Second, // タイムアウトを設定
+	}
 	resp, err := client.Do(req)
 	if err != nil {
 		log.Println(err)
+		c.JSON(http.StatusInternalServerError, gin.H{
+			"message": "投稿の取得に失敗しました",
+		})
 		return
 	}
 	defer resp.Body.Close()
