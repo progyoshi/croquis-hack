@@ -31,7 +31,6 @@ func main() {
 
 	router.POST("/api/today", uploadImage) //今日の画像を投稿
 	router.GET("/api/today", getImage)     //今日の画像を表示
-	// router.GET("/api/todayflag", getTodayflag) //今日投稿したかどうか
 
 	// webフォルダをFrontendとして配信
 	router.GET("/", func(c *gin.Context) {
@@ -222,35 +221,35 @@ func getImage(c *gin.Context) {
 	}
 
 	// レスポンスをデコード
-	var post struct {
+	var posts []struct {
 		ImagePath string `json:"image_path"`
 		PostedAt  string `json:"posted_at"`
 	}
-	err = json.NewDecoder(resp.Body).Decode(&post)
+
+	err = json.NewDecoder(resp.Body).Decode(&posts)
 	if err != nil {
 		log.Println(err)
 		return
 	}
-	if post.ImagePath == "" {
+
+	if len(posts) == 0 {
 		log.Println("今日の投稿が見つかりませんでした。")
 		// ここでも一応フロントに返してるよ：404
 		c.JSON(http.StatusNotFound, gin.H{
 			"message": "今日の投稿が見つかりませんでした。",
 		})
 		return
-
 	}
 
-	log.Printf("投稿を取得できました！:%s\n", post)
+	log.Printf("投稿を取得できました！:%+v\n", posts[0])
 
 	// ストレージ上の画像のパスを返す
-	imageURL := API_URL + "/storage/v1/object/public/images/" + post.ImagePath
+	imageURL := API_URL + "/storage/v1/object/public/images/" + posts[0].ImagePath
 	log.Printf("画像のURLを返します:%s\n", imageURL)
 
 	// これが投稿した画像のJSONだよ
 	c.JSON(http.StatusOK, gin.H{
 		"image_url": imageURL, // 画像のURL
-		// "posted_at": post.PostedAt, // UTC時間での投稿日時返さなくても良いかなって
+		// "posted_at": posts[0].PostedAt, // UTC時間での投稿日時返さなくても良いかなって
 	})
-
 }
