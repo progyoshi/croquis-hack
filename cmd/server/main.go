@@ -20,7 +20,7 @@ import (
 var API_URL string
 var API_KEY string
 var userID = 1 // デモユーザに固定してるよ
-var jst *time.Location
+var jst, _ = time.LoadLocation("Asia/Tokyo")
 
 func main() {
 
@@ -38,17 +38,19 @@ func main() {
 	router := gin.Default()             // Ginルーター初期化
 	router.MaxMultipartMemory = 8 << 20 // 8MBまでのファイルを受け付ける
 
-	router.POST("/api/today", uploadImage) //今日の画像を投稿
-	router.GET("/api/today", getImage)     //今日の画像を表示
-
 	// webフォルダをFrontendとして配信
 	router.GET("/", func(c *gin.Context) {
+		// fmt.Println("GETを受信")
 		c.File("./web/index.html")
+		// fmt.Println("index.htmlを返した")
 	})
 
 	router.Static("/js", "./web/js")   // javascriptのフォルダ配信
 	router.Static("/img", "./web/img") // 画像のフォルダ配信
 	router.StaticFile("style.css", "./web/style.css")
+
+	router.POST("/api/today", uploadImage) //今日の画像を投稿
+	router.GET("/api/today", getImage)     //今日の画像を表示
 
 	// 標準出力にメッセージ表示
 	fmt.Println("Server started: http://localhost:3000")
@@ -69,7 +71,7 @@ func uploadImage(c *gin.Context) {
 	image, err := c.FormFile("test")
 	// この処理超出てくるよ、エラーがあった時ログを出す＆ここで関数を中断するよ
 	if err != nil {
-		log.Println(err)
+		log.Println("画像受け取れなかったよ～")
 		c.JSON(http.StatusBadRequest, gin.H{
 			"message": "画像の受け取りに失敗しました",
 		})
@@ -144,7 +146,7 @@ func uploadImage(c *gin.Context) {
 
 	// StorageのアップロードURL
 	// 一旦ユーザID1に固定してるよ
-	storageURL := API_URL + "/storage/v1/object/" + strconv.Itoa(userID) + "/images/" + imageName
+	storageURL := API_URL + "/storage/v1/object/" + "/images/" + strconv.Itoa(userID) + "/" + imageName
 
 	// Supabase Storageに画像をアップロード
 	// HTTPリクエストを作成
@@ -173,9 +175,12 @@ func uploadImage(c *gin.Context) {
 		return
 	}
 	defer resp.Body.Close()
+	body, _ := io.ReadAll(resp.Body)
 
 	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
-		log.Println("画像のアップロードに失敗しました。ステータスコード:", resp.StatusCode)
+		log.Printf("ストレージ挿入時のエラー泣:%d, body:%s\n",
+			resp.StatusCode,
+			string(body))
 		c.JSON(http.StatusBadGateway, gin.H{
 			"message": "画像のアップロードに失敗しました",
 		})
@@ -228,7 +233,9 @@ func uploadImage(c *gin.Context) {
 	defer resp.Body.Close()
 
 	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
-		log.Println("投稿に失敗しました。ステータスコード:", resp.StatusCode)
+		log.Printf("データベース挿入時のエラー泣: status:%d, body:%s\n",
+			resp.StatusCode,
+			string(body))
 		c.JSON(http.StatusInternalServerError, gin.H{
 			"message": "投稿に失敗しました",
 		})
@@ -237,25 +244,29 @@ func uploadImage(c *gin.Context) {
 	log.Printf("投稿できました！「%s」\n", post.ImagePath)
 
 	// ストレージ上の画像のパスを返す
-	imageURL := API_URL + "/storage/v1/object/public/images/" + post.ImagePath
+	imageURL := API_URL + "/storage/v1/object/public/images/" + strconv.Itoa(userID) + "/" + post.ImagePath
 	log.Printf("画像のURLを返します:%s\n", imageURL)
 
 	// 👇️これが画像投稿した時に画像のURL返すJSONだよ
+	conti_days, total_days := days(c, 0) //ここでも日数のJSON返ってるよ
+	if conti_days == -1 || total_days == -1 {
+		// 日数の取得に失敗した場合のエラーハンドリング
+		c.JSON(http.StatusInternalServerError, gin.H{
+			"message": "日数の取得に失敗しました",
+		})
+		return
+	}
 	c.JSON(http.StatusOK, gin.H{
-		"message":   "投稿に成功しました",
-		"image_url": imageURL, // 画像のURLを返す
+		"message":    "投稿に成功しました",
+		"image_url":  imageURL,   // 画像のURLを返す
+		"conti_days": conti_days, // 継続日数
+		"total_days": total_days, // 総合日数
 	})
 }
 
 // 今日の画像のURLを返す
 func getImage(c *gin.Context) {
 
-	// 現在の日本時刻を取得
-	jst, err := time.LoadLocation("Asia/Tokyo") // 日本時間のタイムゾーンを取得
-	if err != nil {
-		log.Println(err)
-		return
-	}
 	// 4:00～3:59を1日とするため、現在時刻から4時間引いた時刻を取得
 	now := time.Now().In(jst).Add(time.Duration(-4) * time.Hour)
 	startOfDay := time.Date(now.Year(), now.Month(), now.Day(), 4, 0, 0, 0, jst)
@@ -319,9 +330,19 @@ func getImage(c *gin.Context) {
 	if len(posts) == 0 {
 		log.Println("今日の投稿が見つかりませんでした。")
 		// 👇️今日の投稿が無い時のプレーン画像のあれ
-		c.JSON(http.StatusNotFound, gin.H{
-			"message":   "今日の投稿が見つかりませんでした。",
-			"image_url": "/img/plane.png",
+		conti_days, total_days := days(c, 1) // 日数返す関数、ここでも中身ではJSON帰ってるよ
+		if conti_days == -1 || total_days == -1 {
+			// 日数の取得に失敗した場合のエラーハンドリング
+			c.JSON(http.StatusInternalServerError, gin.H{
+				"message": "日数の取得に失敗しました",
+			})
+			return
+		}
+		c.JSON(http.StatusOK, gin.H{
+			"message":    "今日の投稿が見つかりませんでした。",
+			"image_url":  "/img/plane.png",
+			"conti_days": conti_days, // 継続日数
+			"total_days": total_days, // 総合日数
 		})
 		return
 	}
@@ -329,20 +350,30 @@ func getImage(c *gin.Context) {
 	log.Printf("投稿を取得できました！:%+v\n", posts[0])
 
 	// ストレージ上の画像のパスを返す
-	imageURL := API_URL + "/storage/v1/object/public/" + strconv.Itoa(userID) + "/images/" + posts[0].ImagePath
+	imageURL := API_URL + "/storage/v1/object/public/" + "/images/" + strconv.Itoa(userID) + "/" + posts[0].ImagePath
 	log.Printf("画像のURLを返します:%s\n", imageURL)
 
 	// 👇️これが投稿した画像のJSONだよ
+	conti_days, total_days := days(c, 0) //ここでも日数のJSON返ってるよ
+	if conti_days == -1 || total_days == -1 {
+		// 日数の取得に失敗した場合のエラーハンドリング
+		c.JSON(http.StatusInternalServerError, gin.H{
+			"message": "日数の取得に失敗しました",
+		})
+		return
+	}
 	c.JSON(http.StatusOK, gin.H{
-		"image_url": imageURL, // 画像のURL
+		"image_url":  imageURL,   // 画像のURL
+		"conti_days": conti_days, // 継続日数
+		"total_days": total_days, // 総合日数
 		// "posted_at": posts[0].PostedAt, // UTC時間での投稿日時返さなくても良いかなって
 		// "user_id":   posts[0].UserID,   // ユーザID返さなくても良いかなって
 	})
 }
 
 // 継続日数、総合日数を返す
-/*
-func days(c *gin.Context) {
+
+func days(c *gin.Context, todayflg int) (int, int) {
 
 	// 投稿日時を受け取る構造体
 	type Post struct {
@@ -358,7 +389,7 @@ func days(c *gin.Context) {
 		c.JSON(http.StatusInternalServerError, gin.H{
 			"message": "HTTPリクエストの作成に失敗しました",
 		})
-		return
+		return -1, -1
 	}
 
 	req.Header.Set("Authorization", "Bearer "+API_KEY)
@@ -370,7 +401,7 @@ func days(c *gin.Context) {
 		c.JSON(http.StatusInternalServerError, gin.H{
 			"message": "投稿の取得に失敗しました",
 		})
-		return
+		return -1, -1
 	}
 	defer resp.Body.Close()
 
@@ -379,7 +410,7 @@ func days(c *gin.Context) {
 		c.JSON(http.StatusInternalServerError, gin.H{
 			"message": "投稿の取得に失敗しました。",
 		})
-		return
+		return -1, -1
 	}
 
 	var posts []Post
@@ -389,7 +420,7 @@ func days(c *gin.Context) {
 		c.JSON(http.StatusInternalServerError, gin.H{
 			"message": "投稿のデコードに失敗しました",
 		})
-		return
+		return -1, -1
 	}
 
 	postDays := make(map[string]bool) // 投稿した日付を記録するマップ
@@ -400,14 +431,33 @@ func days(c *gin.Context) {
 		postDays[daysJST] = true
 	}
 
-	// 今日未投稿なら昨日までで計算
-	today := time.Now().In(jst).Add(-4 * time.Hour).Format("2006-01-02")
-	todayflg := 0 // 今日投稿済みなら0、未投稿なら1
-	if _, ok := postDays[today]; !ok {
-		log.Println("今日は未投稿だから昨日までで計算するよ")
-		todayflg = 1
+	today := time.Now().In(jst).Add(-4 * time.Hour)
+
+	/*
+		todayStr := today.Format("2006-01-02")
+		todayflg := 0 // 今日投稿済みなら0、未投稿なら1
+		if _, ok := postDays[todayStr]; !ok {
+			log.Println("今日は未投稿だから昨日までで計算するよ")
+			todayflg = 1
+		} */
+
+	// 継続日数を計算
+	continuousDays := 0
+	for i := todayflg; postDays[today.AddDate(0, 0, -i).Format("2006-01-02")]; i++ {
+		continuousDays++
 	}
-	for k := range postDays {
+
+	// 総合日数を計算
+	totalDays := 0
+	for _, posted := range postDays {
+		if posted {
+			totalDays++
+		}
+	}
+
+	// 継続日数と総合日数をログと呼び出し先に返す
+	log.Println("継続日数:", continuousDays, "総合日数:", totalDays)
+
+	return continuousDays, totalDays
 
 }
-*/

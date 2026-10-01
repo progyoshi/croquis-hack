@@ -24,11 +24,19 @@ upload.addEventListener("click",async () => {
             body: formData
         }
     );
+
+    if(!response.ok){
+        console.log("error:", response.status);
+        return;
+    }
+
     const data = await response.json();
 
     const url = data.image_url;
+    const conti_days = data.conti_days; // 継続日数
+    const total_days = data.total_days; // 総日数
 
-    console.log(url)
+    console.log("url:"+url+" conti_days:"+conti_days+" total_days:"+total_days);
 
     preview.src = url;
 });
@@ -43,8 +51,10 @@ window.onload = async() =>{
     const data = await response.json();
 
     const url = data.image_url;
+    const conti_days = data.conti_days; // 継続日数
+    const total_days = data.total_days; // 総日数
 
-    console.log(url)
+    console.log("url:"+url+" conti_days:"+conti_days+" total_days:"+total_days);
 
     preview.src = url;
 };
