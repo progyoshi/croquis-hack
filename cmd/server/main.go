@@ -433,14 +433,6 @@ func days(c *gin.Context, todayflg int) (int, int) {
 
 	today := time.Now().In(jst).Add(-4 * time.Hour)
 
-	/*
-		todayStr := today.Format("2006-01-02")
-		todayflg := 0 // 今日投稿済みなら0、未投稿なら1
-		if _, ok := postDays[todayStr]; !ok {
-			log.Println("今日は未投稿だから昨日までで計算するよ")
-			todayflg = 1
-		} */
-
 	// 継続日数を計算
 	continuousDays := 0
 	for i := todayflg; postDays[today.AddDate(0, 0, -i).Format("2006-01-02")]; i++ {

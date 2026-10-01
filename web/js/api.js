@@ -4,6 +4,10 @@ const filePlace =document.getElementById("filePlace");
 
 const preview = document.getElementById("preview");
 
+// 👇️おせっかい
+const keizoku_days = document.getElementById("keizoku_days");
+const goukei_days = document.getElementById("goukei_days");
+
 // 変更したら入れようとか思ったけどボタンを押したらひっぱるでよかった子たち
 // filePlace.addEventListener("change",function(){
 //     const file = filePlace.files[0];
@@ -33,12 +37,18 @@ upload.addEventListener("click",async () => {
     const data = await response.json();
 
     const url = data.image_url;
+
+    // 👇️おせっかい
     const conti_days = data.conti_days; // 継続日数
     const total_days = data.total_days; // 総日数
 
     console.log("url:"+url+" conti_days:"+conti_days+" total_days:"+total_days);
 
     preview.src = url;
+
+    // 👇️おせっかい
+    kaizoku_days.textContent = conti_days;
+    goukei_days.textContent = total_days;
 });
 
 window.onload = async() =>{
@@ -51,11 +61,16 @@ window.onload = async() =>{
     const data = await response.json();
 
     const url = data.image_url;
+
+    // 👇️おせっかい
     const conti_days = data.conti_days; // 継続日数
     const total_days = data.total_days; // 総日数
 
     console.log("url:"+url+" conti_days:"+conti_days+" total_days:"+total_days);
 
     preview.src = url;
+    // 👇️おせっかい
+    keizoku_days.textContent = conti_days;
+    goukei_days.textContent = total_days;
 };
 // preview.src = ここにpreviewのURLをいれる;
