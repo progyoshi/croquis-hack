@@ -20,6 +20,7 @@ import (
 var API_URL string
 var API_KEY string
 var userID = 1 // デモユーザに固定してるよ
+var jst *time.Location
 
 func main() {
 
@@ -47,6 +48,7 @@ func main() {
 
 	router.Static("/js", "./web/js")   // javascriptのフォルダ配信
 	router.Static("/img", "./web/img") // 画像のフォルダ配信
+	router.StaticFile("style.css", "./web/style.css")
 
 	// 標準出力にメッセージ表示
 	fmt.Println("Server started: http://localhost:3000")
@@ -337,3 +339,75 @@ func getImage(c *gin.Context) {
 		// "user_id":   posts[0].UserID,   // ユーザID返さなくても良いかなって
 	})
 }
+
+// 継続日数、総合日数を返す
+/*
+func days(c *gin.Context) {
+
+	// 投稿日時を受け取る構造体
+	type Post struct {
+		PostedAt time.Time `json:"posted_at"`
+	}
+
+	// ユーザIDに一致する投稿を取得するURL
+	url := API_URL + "/rest/v1/posts?select=posted_at&user_id=eq." + strconv.Itoa(userID) + "&order=posted_at.asc"
+
+	req, err := http.NewRequest("GET", url, nil)
+	if err != nil {
+		log.Println(err)
+		c.JSON(http.StatusInternalServerError, gin.H{
+			"message": "HTTPリクエストの作成に失敗しました",
+		})
+		return
+	}
+
+	req.Header.Set("Authorization", "Bearer "+API_KEY)
+	req.Header.Set("apikey", API_KEY)
+
+	resp, err := http.DefaultClient.Do(req)
+	if err != nil {
+		log.Println(err)
+		c.JSON(http.StatusInternalServerError, gin.H{
+			"message": "投稿の取得に失敗しました",
+		})
+		return
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		log.Println("投稿の取得に失敗しました。ステータスコード:", resp.StatusCode)
+		c.JSON(http.StatusInternalServerError, gin.H{
+			"message": "投稿の取得に失敗しました。",
+		})
+		return
+	}
+
+	var posts []Post
+	err = json.NewDecoder(resp.Body).Decode(&posts)
+	if err != nil {
+		log.Println(err)
+		c.JSON(http.StatusInternalServerError, gin.H{
+			"message": "投稿のデコードに失敗しました",
+		})
+		return
+	}
+
+	postDays := make(map[string]bool) // 投稿した日付を記録するマップ
+	for _, post := range posts {
+		// JSTに変換して日付まで取得
+		daysJST := post.PostedAt.In(jst).Add(-4 * time.Hour).Format("2006-01-02")
+		// 同じ日は1日にカウント
+		postDays[daysJST] = true
+	}
+
+	// 今日未投稿なら昨日までで計算
+	today := time.Now().In(jst).Add(-4 * time.Hour).Format("2006-01-02")
+	todayflg := 0 // 今日投稿済みなら0、未投稿なら1
+	if _, ok := postDays[today]; !ok {
+		log.Println("今日は未投稿だから昨日までで計算するよ")
+		todayflg = 1
+	}
+	for k := range postDays {
+
+}
+*/
