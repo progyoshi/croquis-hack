@@ -1,0 +1,39 @@
+@charset "utf-8";
+
+body {
+  background-color: #fffaf0;
+  color: gray;
+}
+
+@property --hensu-name {
+  syntax: "<angle>";
+  inherits: false;
+  initial-value: 0deg;
+}
+
+@keyframes rotate {
+  to {
+    --hensu-name: 360deg;
+  }
+}
+
+.top {
+  background: linear-gradient(var(--hensu-name), red, blue);
+  animation: rotate 5s linear infinite;
+}
+
+.middle {
+  display: flex;
+  border: 3px solid;
+  padding: 5px;
+  margin: 10px;
+  box-shadow: 0 5px 5px;
+}
+
+.under {
+  display: grid;
+}
+
+#daycount {
+  font-family: serif;
+}

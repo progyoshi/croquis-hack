@@ -3,14 +3,32 @@
     <head>
         <title>croquis-hack</title>
         <meta charset="UTF-8">
+        <link rel="stylesheet" href="style.css" type="text/css">
     </head>
     <body>
-        <h1>
-            今日のクロッキー
-        </h1>
-        <img id="preview" src="" width="500" hight="500">
-        <input id="filePlace" type="file" name="test" required>
-        <button id="upload" type="submit">送信する</button>
-        <script src="js/api.js"></script>
+        <div>
+            <div class="top">
+                <h1>
+                    今日のクロッキー
+                </h1>
+                <h2 id="username">
+                    〇〇さん
+                </h2>
+                <h2 id="daycount">
+                    継続日数：
+                </h2>
+            </div>
+
+            <div class="middle">
+                <img id="preview" src="" width="500">
+            </div>
+
+            <div class="under">
+                <input id="filePlace" type="file" name="test" required>
+                <button id="upload" type="submit">送信する</button>
+            </div>
+
+            <script src="js/api.js"></script>
+        </div>
     </body>
 </html>
