@@ -2,7 +2,7 @@
 
 body {
   background-color: #fffaf0;
-  color: gray;
+  color: black;
 }
 
 @property --hensu-name {
@@ -18,22 +18,30 @@ body {
 }
 
 .top {
-  background: linear-gradient(var(--hensu-name), red, blue);
-  animation: rotate 5s linear infinite;
+  padding: 5px;
+  margin: 10px;
 }
 
 .middle {
   display: flex;
   border: 3px solid;
   padding: 5px;
-  margin: 10px;
+  margin: 25px;
   box-shadow: 0 5px 5px;
+  justify-content: center;
 }
 
 .under {
-  display: grid;
+  /* display: grid; */
+  padding: 20px;
+  margin: 20px;
 }
 
 #daycount {
   font-family: serif;
+}
+
+#rainbow {
+  background: linear-gradient(var(--hensu-name), red, orange, yellow);
+  animation: rotate 5s linear infinite;
 }

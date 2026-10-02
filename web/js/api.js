@@ -8,6 +8,8 @@ const preview = document.getElementById("preview");
 const keizoku_days = document.getElementById("keizoku_days");
 const goukei_days = document.getElementById("goukei_days");
 
+const good_change = document.getElementById("good");
+
 // 変更したら入れようとか思ったけどボタンを押したらひっぱるでよかった子たち
 // filePlace.addEventListener("change",function(){
 //     const file = filePlace.files[0];
@@ -34,6 +36,10 @@ upload.addEventListener("click",async () => {
         return;
     }
 
+    if (response.ok){
+        good_change.id = "rainbow"
+    }
+
     const data = await response.json();
 
     const url = data.image_url;
@@ -58,6 +64,7 @@ window.onload = async() =>{
             method: "GET"
         }
     );
+
     const data = await response.json();
 
     const url = data.image_url;
