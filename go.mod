@@ -1,6 +1,6 @@
 module github.com/progyoshi/croquis-hack
 
-go 1.27.1
+go 1.27.3
 
 require (
 	github.com/gin-gonic/gin v1.12.0
